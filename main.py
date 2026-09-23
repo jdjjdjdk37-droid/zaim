@@ -2,12 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════════════════════════╗
-║   Zain Iraq Bot v6.1 — Railway Ready                    ║
+║   Zain Iraq Bot v8.0 — Telebot Edition                  ║
 ║   حقوق التطوير: @to_ls                                   ║
 ╚══════════════════════════════════════════════════════════╝
 """
 
-import os
 import re
 import json
 import base64
@@ -15,28 +14,18 @@ import time
 import logging
 import requests
 from datetime import datetime
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler,
-    CallbackQueryHandler, ContextTypes, filters
-)
-from telegram.constants import ParseMode
+import telebot
+from telebot import types
 
 
 # ═══════════════════════════════════════════════════════════
 #                    الإعدادات
 # ═══════════════════════════════════════════════════════════
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+BOT_TOKEN = "8649116276:AAGRor3c0juxDASZ2tJPutf31nGbXQ2NsSg"
 
-if not BOT_TOKEN:
-    raise SystemExit(
-        "❌ BOT_TOKEN غير معرّف!\n"
-        "📌 أضفه في Railway → Variables → BOT_TOKEN"
-    )
-
-DEVELOPER = os.getenv("DEVELOPER", "@to_ls")
-DEV_LINK = os.getenv("DEV_LINK", "https://t.me/to_ls")
-CHANNEL_LINK = os.getenv("CHANNEL_LINK", "https://t.me/to_ls")
+DEVELOPER = "@to_ls"
+DEV_LINK = "https://t.me/to_ls"
+CHANNEL_LINK = "https://t.me/to_ls"
 
 BASE_URL = "https://mw-mobileapp.iq.zain.com/api"
 
@@ -52,15 +41,21 @@ COMMON_HEADERS = {
     'Content-Type': "application/json; charset=UTF-8"
 }
 
-USER_STATE = {}
-CACHE = {}
-
 
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+
+# ═══════════════════════════════════════════════════════════
+#                    إنشاء البوت
+# ═══════════════════════════════════════════════════════════
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+
+USER_STATE = {}
+CACHE = {}
 
 
 # ═══════════════════════════════════════════════════════════
@@ -153,7 +148,7 @@ _CE = {
 }
 
 
-def ce(text: str) -> str:
+def ce(text):
     if not text:
         return text
     for ch, rep in _CE.items():
@@ -273,53 +268,6 @@ def login_zain(msisdn, password):
         return data["data"]["access_token"], None
     except Exception as e:
         return None, str(e)
-
-
-# ═══════════════════════════════════════════════════════════
-#     🎨 أزرار
-# ═══════════════════════════════════════════════════════════
-def make_button(text, callback_data=None, url=None, color=None):
-    button = {"text": text}
-    if url:
-        button["url"] = url
-    else:
-        button["callback_data"] = callback_data or "noop"
-    if color in ("primary", "success", "danger"):
-        button["style"] = color
-    return button
-
-
-def send_colored_keyboard(chat_id, text, keyboard_rows):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": chat_id,
-        "text": ce(text),
-        "parse_mode": "HTML",
-        "reply_markup": {"inline_keyboard": keyboard_rows},
-        "disable_web_page_preview": True,
-    }
-    try:
-        return requests.post(url, json=payload, timeout=15).json()
-    except Exception as e:
-        logger.error(f"send_colored_keyboard error: {e}")
-        return None
-
-
-def edit_colored_keyboard(chat_id, message_id, text, keyboard_rows):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
-    payload = {
-        "chat_id": chat_id,
-        "message_id": message_id,
-        "text": ce(text),
-        "parse_mode": "HTML",
-        "reply_markup": {"inline_keyboard": keyboard_rows},
-        "disable_web_page_preview": True,
-    }
-    try:
-        return requests.post(url, json=payload, timeout=15).json()
-    except Exception as e:
-        logger.error(f"edit_colored_keyboard error: {e}")
-        return None
 
 
 # ═══════════════════════════════════════════════════════════
@@ -580,76 +528,55 @@ def fmt_token_info(state):
 
 
 # ═══════════════════════════════════════════════════════════
-#         🎨 الأزرار
+#                    الأزرار (telebot)
 # ═══════════════════════════════════════════════════════════
 def kb_main(msisdn="—"):
-    return [
-        [make_button(f"👑 الحساب: {msisdn} 👑", "noop", color="primary")],
-        [
-            make_button("👤 الملف", "profile", color="primary"),
-            make_button("💰 الرصيد", "balance", color="success"),
-        ],
-        [
-            make_button("🏆 نقاط ممنون", "loyalty", color="primary"),
-            make_button("📦 الاشتراكات", "subs", color="primary"),
-        ],
-        [
-            make_button("📬 الإشعارات", "notifs", color="primary"),
-            make_button("🔑 التوكن", "token_info", color="primary"),
-        ],
-        [make_button("📋 تقرير شامل", "full_report", color="success")],
-        [
-            make_button("🔄 تحديث", "refresh", color="primary"),
-            make_button("🚪 خروج", "logout", color="danger"),
-        ],
-        [make_button("ℹ️ معلومات البوت", "bot_info", color="primary")],
-        [
-            make_button("👨‍💻 المطور", url=DEV_LINK, color="primary"),
-            make_button("📢 القناة", url=CHANNEL_LINK, color="primary"),
-        ],
-    ]
+    markup = types.InlineKeyboardMarkup(row_width=2)
+
+    btn_account = types.InlineKeyboardButton(f"👑 الحساب: {msisdn} 👑", callback_data="noop")
+    btn_profile = types.InlineKeyboardButton("👤 الملف", callback_data="profile")
+    btn_balance = types.InlineKeyboardButton("💰 الرصيد", callback_data="balance")
+    btn_loyalty = types.InlineKeyboardButton("🏆 نقاط ممنون", callback_data="loyalty")
+    btn_subs = types.InlineKeyboardButton("📦 الاشتراكات", callback_data="subs")
+    btn_notifs = types.InlineKeyboardButton("📬 الإشعارات", callback_data="notifs")
+    btn_token = types.InlineKeyboardButton("🔑 التوكن", callback_data="token_info")
+    btn_report = types.InlineKeyboardButton("📋 تقرير شامل", callback_data="full_report")
+    btn_refresh = types.InlineKeyboardButton("🔄 تحديث", callback_data="refresh")
+    btn_logout = types.InlineKeyboardButton("🚪 خروج", callback_data="logout")
+    btn_info = types.InlineKeyboardButton("ℹ️ معلومات البوت", callback_data="bot_info")
+    btn_dev = types.InlineKeyboardButton("👨‍💻 المطور", url=DEV_LINK)
+    btn_channel = types.InlineKeyboardButton("📢 القناة", url=CHANNEL_LINK)
+
+    markup.row(btn_account)
+    markup.row(btn_profile, btn_balance)
+    markup.row(btn_loyalty, btn_subs)
+    markup.row(btn_notifs, btn_token)
+    markup.row(btn_report)
+    markup.row(btn_refresh, btn_logout)
+    markup.row(btn_info)
+    markup.row(btn_dev, btn_channel)
+
+    return markup
 
 
 def kb_back():
-    return [
-        [
-            make_button("🔙 رجوع", "menu", color="primary"),
-            make_button("🔄 تحديث", "refresh_section", color="success"),
-        ],
-        [make_button("🏠 القائمة الرئيسية", "menu", color="primary")],
-    ]
+    markup = types.InlineKeyboardMarkup(row_width=2)
+    btn_back = types.InlineKeyboardButton("🔙 رجوع", callback_data="menu")
+    btn_refresh = types.InlineKeyboardButton("🔄 تحديث", callback_data="refresh_section")
+    btn_home = types.InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="menu")
 
+    markup.row(btn_back, btn_refresh)
+    markup.row(btn_home)
 
-# ═══════════════════════════════════════════════════════════
-#         إرسال رسائل بأزرار ملوّنة
-# ═══════════════════════════════════════════════════════════
-async def reply_colored(update_or_query, text, keyboard_rows, edit=False):
-    if edit:
-        chat_id = update_or_query.message.chat.id
-        message_id = update_or_query.message.message_id
-
-        result = edit_colored_keyboard(chat_id, message_id, text, keyboard_rows)
-
-        if result and not result.get("ok"):
-            desc = result.get("description", "")
-            if "not modified" not in desc:
-                await reply_colored(update_or_query, text, keyboard_rows, edit=False)
-    else:
-        chat_id = None
-        if hasattr(update_or_query, "message") and update_or_query.message:
-            chat_id = update_or_query.message.chat.id
-        elif hasattr(update_or_query, "effective_chat"):
-            chat_id = update_or_query.effective_chat.id
-
-        if chat_id:
-            send_colored_keyboard(chat_id, text, keyboard_rows)
+    return markup
 
 
 # ═══════════════════════════════════════════════════════════
 #                    أوامر البوت
 # ═══════════════════════════════════════════════════════════
-async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+@bot.message_handler(commands=["start"])
+def cmd_start(message):
+    user = message.from_user
     USER_STATE[user.id] = {"step": "waiting_input", "name": user.first_name}
 
     welcome = (
@@ -667,15 +594,16 @@ async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"🛡️ <b>حقوق التطوير:</b> {DEVELOPER}\n"
     )
 
-    send_colored_keyboard(update.effective_chat.id, welcome, [])
+    bot.send_message(message.chat.id, ce(welcome), parse_mode="HTML")
 
 
-async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+@bot.message_handler(commands=["menu"])
+def cmd_menu(message):
+    user_id = message.from_user.id
     state = USER_STATE.get(user_id, {})
 
     if not state.get("token"):
-        send_colored_keyboard(update.effective_chat.id, "🔴 لا يوجد حساب مسجل. ابدأ بـ /start", [])
+        bot.send_message(message.chat.id, ce("🔴 لا يوجد حساب مسجل. ابدأ بـ /start"), parse_mode="HTML")
         return
 
     text = (
@@ -683,25 +611,27 @@ async def cmd_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"📱 الحساب: <code>{esc(state.get('msisdn'))}</code>"
     )
-    send_colored_keyboard(update.effective_chat.id, text, kb_main(state.get("msisdn")))
+    bot.send_message(message.chat.id, ce(text), parse_mode="HTML",
+                     reply_markup=kb_main(state.get("msisdn")))
 
 
-async def cmd_dev(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    send_colored_keyboard(
-        update.effective_chat.id,
+@bot.message_handler(commands=["dev"])
+def cmd_dev(message):
+    text = (
         f"🛡️ <b>حقوق التطوير</b>\n\n"
         f"✨ المطوّر: {DEVELOPER}\n"
-        f"🔥 الرابط: {DEV_LINK}",
-        []
+        f"🔥 الرابط: {DEV_LINK}"
     )
+    bot.send_message(message.chat.id, ce(text), parse_mode="HTML")
 
 
 # ═══════════════════════════════════════════════════════════
 #                    معالجة الرسائل
 # ═══════════════════════════════════════════════════════════
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    text = update.message.text.strip()
+@bot.message_handler(content_types=["text"])
+def handle_message(message):
+    user_id = message.from_user.id
+    text = message.text.strip()
 
     if not text:
         return
@@ -713,20 +643,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msisdn = state["msisdn"]
         password = text
 
-        msg = await update.message.reply_text(ce("🔄 <i>جاري تسجيل الدخول...</i>"), parse_mode=ParseMode.HTML)
+        msg = bot.send_message(message.chat.id, ce("🔄 <i>جاري تسجيل الدخول...</i>"), parse_mode="HTML")
 
         token, error = login_zain(msisdn, password)
 
         if error:
-            await msg.edit_text(
+            bot.edit_message_text(
                 ce(f"🔴 <b>فشل تسجيل الدخول</b>\n\nالسبب: {esc(error)}\n\nحاول مرة أخرى أو اكتب /start"),
-                parse_mode=ParseMode.HTML
+                message.chat.id, msg.message_id, parse_mode="HTML"
             )
             USER_STATE[user_id] = {"step": "waiting_input"}
             return
 
         try:
-            await update.message.delete()
+            bot.delete_message(message.chat.id, message.message_id)
         except Exception:
             pass
 
@@ -737,12 +667,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "name": state.get("name", ""),
         }
 
-        await msg.edit_text(ce("🔄 <i>جاري جلب البيانات...</i>"), parse_mode=ParseMode.HTML)
+        bot.edit_message_text(ce("🔄 <i>جاري جلب البيانات...</i>"),
+                              message.chat.id, msg.message_id, parse_mode="HTML")
         data = get_user_data(user_id, token, msisdn, force=True)
         summary = fmt_summary(data, msisdn)
 
         try:
-            await msg.delete()
+            bot.delete_message(message.chat.id, msg.message_id)
         except Exception:
             pass
 
@@ -753,7 +684,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{summary}\n"
             f"✨ <b>اختر من القائمة:</b>"
         )
-        send_colored_keyboard(update.effective_chat.id, welcome_text, kb_main(msisdn))
+        bot.send_message(message.chat.id, ce(welcome_text), parse_mode="HTML",
+                         reply_markup=kb_main(msisdn))
         return
 
     # ─── 2. JWT token ───
@@ -761,28 +693,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         token_type = identify_token_type(text)
 
         if token_type == "refresh":
-            send_colored_keyboard(
-                update.effective_chat.id,
-                f"⚠️ <b>هذا refresh_token وليس access_token</b>\n\n"
-                f"refresh_token لا يعمل مع الـ endpoints.\n"
-                f"استخدم access_token بدلاً منه.\n\n"
-                f"🔵 سجّل دخول برقم + كلمة مرور للحصول على access_token.",
-                []
+            bot.send_message(
+                message.chat.id,
+                ce(f"⚠️ <b>هذا refresh_token وليس access_token</b>\n\n"
+                   f"refresh_token لا يعمل مع الـ endpoints.\n"
+                   f"استخدم access_token بدلاً منه.\n\n"
+                   f"🔵 سجّل دخول برقم + كلمة مرور للحصول على access_token."),
+                parse_mode="HTML"
             )
             return
 
         if token_type == "invalid":
-            send_colored_keyboard(update.effective_chat.id, "🔴 التوكن غير صالح", [])
+            bot.send_message(message.chat.id, ce("🔴 التوكن غير صالح"), parse_mode="HTML")
             return
 
         msisdn = get_msisdn_from_token(text)
         exp = get_expiry_from_token(text)
 
         if exp and time.time() >= exp:
-            send_colored_keyboard(
-                update.effective_chat.id,
-                f"🔴 <b>التوكن منتهي الصلاحية</b>\n\nانتهى في: {esc(fmt_ts(exp))}",
-                []
+            bot.send_message(
+                message.chat.id,
+                ce(f"🔴 <b>التوكن منتهي الصلاحية</b>\n\nانتهى في: {esc(fmt_ts(exp))}"),
+                parse_mode="HTML"
             )
             return
 
@@ -792,14 +724,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "msisdn": msisdn,
         }
 
-        msg = await update.message.reply_text(ce("🔄 <i>جاري جلب البيانات...</i>"), parse_mode=ParseMode.HTML)
+        msg = bot.send_message(message.chat.id, ce("🔄 <i>جاري جلب البيانات...</i>"), parse_mode="HTML")
         data = get_user_data(user_id, text, msisdn, force=True)
         summary = fmt_summary(data, msisdn)
 
         hours = max(0, (exp - time.time()) / 3600) if exp else 0
 
         try:
-            await msg.delete()
+            bot.delete_message(message.chat.id, msg.message_id)
         except Exception:
             pass
 
@@ -811,7 +743,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"⏳ <b>صلاحية التوكن:</b> {hours:.1f} ساعة\n\n"
             f"✨ <b>اختر من القائمة:</b>"
         )
-        send_colored_keyboard(update.effective_chat.id, welcome_text, kb_main(msisdn))
+        bot.send_message(message.chat.id, ce(welcome_text), parse_mode="HTML",
+                         reply_markup=kb_main(msisdn))
         return
 
     # ─── 3. رقم ───
@@ -819,10 +752,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msisdn = normalize_msisdn(text)
 
         if not validate_msisdn(msisdn):
-            send_colored_keyboard(
-                update.effective_chat.id,
-                "🔴 <b>رقم غير صالح</b>\n\nيجب أن يبدأ بـ 077 أو 078 ويتكون من 10 أرقام",
-                []
+            bot.send_message(
+                message.chat.id,
+                ce("🔴 <b>رقم غير صالح</b>\n\nيجب أن يبدأ بـ 077 أو 078 ويتكون من 10 أرقام"),
+                parse_mode="HTML"
             )
             return
 
@@ -832,38 +765,38 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "name": state.get("name", ""),
         }
 
-        send_colored_keyboard(
-            update.effective_chat.id,
-            f"📱 <b>الرقم:</b> <code>{esc(msisdn)}</code>\n\n"
-            f"🔑 <b>أرسل كلمة المرور الآن</b>\n"
-            f"<i>(سيتم حذف رسالة كلمة المرور تلقائياً للأمان)</i>",
-            []
+        bot.send_message(
+            message.chat.id,
+            ce(f"📱 <b>الرقم:</b> <code>{esc(msisdn)}</code>\n\n"
+               f"🔑 <b>أرسل كلمة المرور الآن</b>\n"
+               f"<i>(سيتم حذف رسالة كلمة المرور تلقائياً للأمان)</i>"),
+            parse_mode="HTML"
         )
         return
 
     # ─── 4. غير معروف ───
-    send_colored_keyboard(
-        update.effective_chat.id,
-        f"⚠️ <b>لم أفهم المدخل</b>\n\n"
-        f"أرسل:\n"
-        f"  📱 رقم الهاتف (مثل: 07801234567)\n"
-        f"  🔑 أو access_token",
-        []
+    bot.send_message(
+        message.chat.id,
+        ce(f"⚠️ <b>لم أفهم المدخل</b>\n\n"
+           f"أرسل:\n"
+           f"  📱 رقم الهاتف (مثل: 07801234567)\n"
+           f"  🔑 أو access_token"),
+        parse_mode="HTML"
     )
 
 
 # ═══════════════════════════════════════════════════════════
 #                    معالجة الأزرار
 # ═══════════════════════════════════════════════════════════
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
+@bot.callback_query_handler(func=lambda call: True)
+def button_callback(call):
+    query = call
     user_id = query.from_user.id
     state = USER_STATE.get(user_id, {})
     action = query.data
 
     if action == "noop":
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── معلومات البوت ───
@@ -873,7 +806,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━\n\n"
             f"👑 <b>الاسم:</b> بوت زين العراق\n"
             f"📌 <b>الوصف:</b> واجهة تفاعلية لحساب زين\n"
-            f"🔖 <b>الإصدار:</b> v6.1\n"
+            f"🔖 <b>الإصدار:</b> v8.0 (Telebot)\n"
             f"👨‍💻 <b>المطور:</b> {DEVELOPER}\n"
             f"📢 <b>القناة:</b> {CHANNEL_LINK}\n"
             f"━━━━━━━━━━━━━━━━━━━\n\n"
@@ -885,11 +818,21 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"  • إيموجيات مميزة 🎨\n"
             f"━━━━━━━━━━━━━━━━━━━"
         )
-        await reply_colored(query, text, kb_back(), edit=True)
+        try:
+            bot.edit_message_text(
+                ce(text),
+                query.message.chat.id,
+                query.message.message_id,
+                parse_mode="HTML",
+                reply_markup=kb_back()
+            )
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     if action not in ("menu",) and not state.get("token"):
-        await reply_colored(query, "🔴 جلسة منتهية. ابدأ بـ /start", [], edit=True)
+        bot.answer_callback_query(query.id, "جلسة منتهية. ابدأ بـ /start", show_alert=True)
         return
 
     token = state.get("token")
@@ -906,7 +849,17 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{summary}"
         )
-        await reply_colored(query, text, kb_main(msisdn), edit=True)
+        try:
+            bot.edit_message_text(
+                ce(text),
+                query.message.chat.id,
+                query.message.message_id,
+                parse_mode="HTML",
+                reply_markup=kb_main(msisdn)
+            )
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_main(msisdn))
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── تحديث ───
@@ -920,14 +873,33 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━━\n\n"
             f"{summary}"
         )
-        await reply_colored(query, text, kb_main(msisdn), edit=True)
+        try:
+            bot.edit_message_text(
+                ce(text),
+                query.message.chat.id,
+                query.message.message_id,
+                parse_mode="HTML",
+                reply_markup=kb_main(msisdn)
+            )
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_main(msisdn))
+        bot.answer_callback_query(query.id, "✅ تم التحديث")
         return
 
     # ─── خروج ───
     if action == "logout":
         USER_STATE.pop(user_id, None)
         CACHE.pop(user_id, None)
-        await reply_colored(query, "🚪 <b>تم تسجيل الخروج بنجاح</b>\n\nللدخول مجدداً، أرسل /start", [], edit=True)
+        try:
+            bot.edit_message_text(
+                ce("🚪 <b>تم تسجيل الخروج بنجاح</b>\n\nللدخول مجدداً، أرسل /start"),
+                query.message.chat.id,
+                query.message.message_id,
+                parse_mode="HTML"
+            )
+        except Exception:
+            bot.send_message(query.message.chat.id, ce("🚪 <b>تم تسجيل الخروج بنجاح</b>"), parse_mode="HTML")
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── جلب البيانات ───
@@ -935,32 +907,68 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ─── الملف الشخصي ───
     if action == "profile":
-        await reply_colored(query, fmt_profile(data), kb_back(), edit=True)
+        text = fmt_profile(data)
+        try:
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── الرصيد ───
     if action == "balance":
-        await reply_colored(query, fmt_balance(data), kb_back(), edit=True)
+        text = fmt_balance(data)
+        try:
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── نقاط ممنون ───
     if action == "loyalty":
-        await reply_colored(query, fmt_loyalty(data), kb_back(), edit=True)
+        text = fmt_loyalty(data)
+        try:
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── الاشتراكات ───
     if action == "subs":
-        await reply_colored(query, fmt_subs(data), kb_back(), edit=True)
+        text = fmt_subs(data)
+        try:
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── الإشعارات ───
     if action == "notifs":
-        await reply_colored(query, fmt_notifs(data), kb_back(), edit=True)
+        text = fmt_notifs(data)
+        try:
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── التوكن ───
     if action == "token_info":
-        await reply_colored(query, fmt_token_info(state), kb_back(), edit=True)
+        text = fmt_token_info(state)
+        try:
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
+        except Exception:
+            bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
 
     # ─── تقرير شامل ───
@@ -980,43 +988,31 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         if len(txt) > 4000:
-            await reply_colored(query, fmt_summary(data, msisdn), kb_back(), edit=True)
+            try:
+                bot.edit_message_text(ce(fmt_summary(data, msisdn)),
+                                      query.message.chat.id, query.message.message_id,
+                                      parse_mode="HTML", reply_markup=kb_back())
+            except Exception:
+                pass
             for section_txt in [fmt_profile(data), fmt_balance(data), fmt_loyalty(data), fmt_subs(data)]:
-                await reply_colored(query, section_txt, [], edit=False)
+                bot.send_message(query.message.chat.id, ce(section_txt), parse_mode="HTML")
         else:
-            await reply_colored(query, txt, kb_back(), edit=True)
+            try:
+                bot.edit_message_text(ce(txt), query.message.chat.id, query.message.message_id,
+                                      parse_mode="HTML", reply_markup=kb_back())
+            except Exception:
+                bot.send_message(query.message.chat.id, ce(txt), parse_mode="HTML", reply_markup=kb_back())
+        bot.answer_callback_query(query.id, "")
         return
-
-
-# ═══════════════════════════════════════════════════════════
-#                    خطأ عام
-# ═══════════════════════════════════════════════════════════
-async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.error(f"Update {update} caused error: {context.error}")
 
 
 # ═══════════════════════════════════════════════════════════
 #                    التشغيل
 # ═══════════════════════════════════════════════════════════
-def main():
+if __name__ == "__main__":
     print("🔥 جاري تشغيل البوت...")
     print(f"🔑 Token: {BOT_TOKEN[:15]}...")
     print(f"👨‍💻 Developer: {DEVELOPER}")
-
-    app = Application.builder().token(BOT_TOKEN).build()
-
-    app.add_handler(CommandHandler("start", cmd_start))
-    app.add_handler(CommandHandler("menu", cmd_menu))
-    app.add_handler(CommandHandler("dev", cmd_dev))
-
-    app.add_handler(CallbackQueryHandler(button_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-    app.add_error_handler(error_handler)
-
     print(f"🟢 البوت يعمل — المطوّر: {DEVELOPER}")
 
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
-
-
-if __name__ == "__main__":
-    main(
+    bot.infinity_polling(timeout=30, long_polling_timeout=30)
