@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════════════════════════╗
-║   Zain Iraq Bot v8.0 — Telebot Edition                  ║
+║   Zain Iraq Bot v9.0 — 711Proxy + Turbo Mode            ║
 ║   حقوق التطوير: @to_ls                                   ║
 ╚══════════════════════════════════════════════════════════╝
 """
@@ -13,6 +13,7 @@ import base64
 import time
 import logging
 import requests
+import concurrent.futures
 from datetime import datetime
 import telebot
 from telebot import types
@@ -40,6 +41,25 @@ COMMON_HEADERS = {
     'Skel-Installation-Id': "a7f6551e0ac34017fcf8c1cf7ac56bada3eb793b",
     'Content-Type': "application/json; charset=UTF-8"
 }
+
+# ═══════════════════════════════════════════════════════════
+#     🔥 البروكسي (711proxy)
+# ═══════════════════════════════════════════════════════════
+PROXY_USER = "USER626435-zone-custom-region-SA"
+PROXY_PASS = "91882b121"
+PROXY_HOST = "global.rotgb.711proxy.com"
+PROXY_PORT = "10000"
+
+PROXY = {
+    "http": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+    "https": f"http://{PROXY_USER}:{PROXY_PASS}@{PROXY_HOST}:{PROXY_PORT}",
+}
+
+# خيار استخدام البروكسي
+USE_PROXY = True
+
+# مهلة الاتصال
+TIMEOUT = 8
 
 
 logging.basicConfig(
@@ -236,63 +256,92 @@ def days_from_now(ts_str):
         return None
 
 
-def api_get(path, token, **params):
+# ═══════════════════════════════════════════════════════════
+#     🚀 دالة API محسّنة مع البروكسي
+# ═══════════════════════════════════════════════════════════
+def api_get(path, token, use_proxy=None, **params):
+    """
+    طلب GET محسّن مع دعم البروكسي
+    """
+    if use_proxy is None:
+        use_proxy = USE_PROXY
+
     headers = {**COMMON_HEADERS, "Authorization": f"Bearer {token}"}
+    proxies = PROXY if use_proxy else None
+
     try:
-        r = requests.get(f"{BASE_URL}{path}", headers=headers, params=params, timeout=15)
+        r = requests.get(
+            f"{BASE_URL}{path}",
+            headers=headers,
+            params=params,
+            timeout=TIMEOUT,
+            proxies=proxies,
+        )
         if r.status_code == 200:
             return r.json()
         return {"status": "error", "code": r.status_code}
+    except requests.exceptions.ProxyError:
+        # فشل البروكسي — جرّب بدون بروكسي
+        if use_proxy:
+            return api_get(path, token, use_proxy=False, **params)
+        return {"status": "error", "message": "Proxy Error"}
+    except requests.exceptions.Timeout:
+        return {"status": "error", "message": "Timeout"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
 
-def esc(t):
-    if t is None:
-        return "—"
-    return str(t).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-
-
-def login_zain(msisdn, password):
-    try:
-        r = requests.post(
-            f"{BASE_URL}/user/login",
-            data=json.dumps({"msisdn": msisdn, "password": password}),
-            headers=COMMON_HEADERS,
-            timeout=15
-        )
-        data = r.json()
-        if data.get("status") != "success":
-            err = data.get("error", {})
-            return None, err.get("message", "فشل تسجيل الدخول")
-        return data["data"]["access_token"], None
-    except Exception as e:
-        return None, str(e)
-
-
 # ═══════════════════════════════════════════════════════════
-#                    جلب البيانات
+#     🚀 جلب البيانات بـ Parallel (سريع جداً)
 # ═══════════════════════════════════════════════════════════
+ENDPOINTS = [
+    ("profile", "/v2/user/profile", {}),
+    ("wallet", "/number/wallet", {"msisdn": "auto"}),
+    ("subaccounts", "/number/subaccounts", {"msisdn": "auto"}),
+    ("loyalty", "/loyalty/info", {}),
+    ("subscriptions", "/number/subscriptions", {"msisdn": "auto"}),
+    ("notifications", "/notifications", {"offset": 0, "limit": 10}),
+]
+
+
+def _fetch_one(token, msisdn, key, path, params):
+    """جلب endpoint واحد"""
+    actual_params = {k: (msisdn if v == "auto" else v) for k, v in params.items()}
+    r = api_get(path, token, **actual_params)
+
+    if r.get("status") == "success":
+        return key, r.get("data", {})
+
+    if key in ("subaccounts", "subscriptions"):
+        return key, []
+    return key, {}
+
+
 def fetch_all_data(token, msisdn):
+    """
+    جلب جميع البيانات بالتوازي — أسرع 6 مرات
+    """
     data = {}
 
-    r = api_get("/v2/user/profile", token)
-    data["profile"] = r.get("data", {}) if r.get("status") == "success" else {}
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+            futures = [
+                executor.submit(_fetch_one, token, msisdn, key, path, params)
+                for key, path, params in ENDPOINTS
+            ]
 
-    r = api_get("/number/wallet", token, msisdn=msisdn)
-    data["wallet"] = r.get("data", {}) if r.get("status") == "success" else {}
+            for future in concurrent.futures.as_completed(futures, timeout=20):
+                try:
+                    key, value = future.result(timeout=5)
+                    data[key] = value
+                except Exception as e:
+                    logger.error(f"Parallel fetch error: {e}")
 
-    r = api_get("/number/subaccounts", token, msisdn=msisdn)
-    data["subaccounts"] = r.get("data", []) if r.get("status") == "success" else []
+    except Exception as e:
+        logger.error(f"fetch_all_data error: {e}")
 
-    r = api_get("/loyalty/info", token)
-    data["loyalty"] = r.get("data", {}) if r.get("status") == "success" else {}
-
-    r = api_get("/number/subscriptions", token, msisdn=msisdn)
-    data["subscriptions"] = r.get("data", []) if r.get("status") == "success" else []
-
-    r = api_get("/notifications", token, offset=0, limit=10)
-    data["notifications"] = r.get("data", {}) if r.get("status") == "success" else {}
+    for key, _, _ in ENDPOINTS:
+        data.setdefault(key, [] if key in ("subaccounts", "subscriptions") else {})
 
     return data
 
@@ -300,11 +349,53 @@ def fetch_all_data(token, msisdn):
 def get_user_data(user_id, token, msisdn, force=False):
     now = time.time()
     cached = CACHE.get(user_id)
-    if not force and cached and (now - cached.get("ts", 0)) < 60:
+    if not force and cached and (now - cached.get("ts", 0)) < 120:
         return cached["data"]
     data = fetch_all_data(token, msisdn)
     CACHE[user_id] = {"data": data, "ts": now}
     return data
+
+
+# ═══════════════════════════════════════════════════════════
+#     🚀 تسجيل دخول محسّن مع البروكسي
+# ═══════════════════════════════════════════════════════════
+def login_zain(msisdn, password):
+    """تسجيل دخول مع دعم البروكسي"""
+    try:
+        r = requests.post(
+            f"{BASE_URL}/user/login",
+            data=json.dumps({"msisdn": msisdn, "password": password}),
+            headers=COMMON_HEADERS,
+            timeout=TIMEOUT,
+            proxies=PROXY if USE_PROXY else None,
+        )
+        data = r.json()
+        if data.get("status") != "success":
+            err = data.get("error", {})
+            return None, err.get("message", "فشل تسجيل الدخول")
+        return data["data"]["access_token"], None
+    except requests.exceptions.ProxyError:
+        if USE_PROXY:
+            # جرّب بدون بروكسي
+            try:
+                r = requests.post(
+                    f"{BASE_URL}/user/login",
+                    data=json.dumps({"msisdn": msisdn, "password": password}),
+                    headers=COMMON_HEADERS,
+                    timeout=TIMEOUT,
+                )
+                data = r.json()
+                if data.get("status") != "success":
+                    err = data.get("error", {})
+                    return None, err.get("message", "فشل تسجيل الدخول")
+                return data["data"]["access_token"], None
+            except Exception as e:
+                return None, str(e)
+        return None, "Proxy Error"
+    except requests.exceptions.Timeout:
+        return None, "انتهت المهلة — تحقق من الشبكة"
+    except Exception as e:
+        return None, str(e)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -339,7 +430,7 @@ def fmt_summary(data, msisdn):
     subs = data.get("subscriptions", [])
 
     name = p.get("name", "—")
-    balance = w.get("balance", {}).get("value", 0)
+    balance = w.get("balance", {}).get("value", 0) if isinstance(w.get("balance"), dict) else 0
     points = l.get("total_points", 0)
     tier_ar = l.get("localized_tier", {}).get("ar", "—")
 
@@ -387,7 +478,7 @@ def fmt_profile(data):
 
 def fmt_balance(data):
     w = data.get("wallet", {})
-    bal = w.get("balance", {})
+    bal = w.get("balance", {}) if isinstance(w, dict) else {}
     amount = bal.get("value", 0)
     expiry = bal.get("expiry", "")
 
@@ -528,46 +619,44 @@ def fmt_token_info(state):
 
 
 # ═══════════════════════════════════════════════════════════
-#                    الأزرار (telebot)
+#                    الأزرار
 # ═══════════════════════════════════════════════════════════
 def kb_main(msisdn="—"):
     markup = types.InlineKeyboardMarkup(row_width=2)
 
-    btn_account = types.InlineKeyboardButton(f"👑 الحساب: {msisdn} 👑", callback_data="noop")
-    btn_profile = types.InlineKeyboardButton("👤 الملف", callback_data="profile")
-    btn_balance = types.InlineKeyboardButton("💰 الرصيد", callback_data="balance")
-    btn_loyalty = types.InlineKeyboardButton("🏆 نقاط ممنون", callback_data="loyalty")
-    btn_subs = types.InlineKeyboardButton("📦 الاشتراكات", callback_data="subs")
-    btn_notifs = types.InlineKeyboardButton("📬 الإشعارات", callback_data="notifs")
-    btn_token = types.InlineKeyboardButton("🔑 التوكن", callback_data="token_info")
-    btn_report = types.InlineKeyboardButton("📋 تقرير شامل", callback_data="full_report")
-    btn_refresh = types.InlineKeyboardButton("🔄 تحديث", callback_data="refresh")
-    btn_logout = types.InlineKeyboardButton("🚪 خروج", callback_data="logout")
-    btn_info = types.InlineKeyboardButton("ℹ️ معلومات البوت", callback_data="bot_info")
-    btn_dev = types.InlineKeyboardButton("👨‍💻 المطور", url=DEV_LINK)
-    btn_channel = types.InlineKeyboardButton("📢 القناة", url=CHANNEL_LINK)
-
-    markup.row(btn_account)
-    markup.row(btn_profile, btn_balance)
-    markup.row(btn_loyalty, btn_subs)
-    markup.row(btn_notifs, btn_token)
-    markup.row(btn_report)
-    markup.row(btn_refresh, btn_logout)
-    markup.row(btn_info)
-    markup.row(btn_dev, btn_channel)
-
+    markup.row(types.InlineKeyboardButton(f"👑 الحساب: {msisdn} 👑", callback_data="noop"))
+    markup.row(
+        types.InlineKeyboardButton("👤 الملف", callback_data="profile"),
+        types.InlineKeyboardButton("💰 الرصيد", callback_data="balance"),
+    )
+    markup.row(
+        types.InlineKeyboardButton("🏆 نقاط ممنون", callback_data="loyalty"),
+        types.InlineKeyboardButton("📦 الاشتراكات", callback_data="subs"),
+    )
+    markup.row(
+        types.InlineKeyboardButton("📬 الإشعارات", callback_data="notifs"),
+        types.InlineKeyboardButton("🔑 التوكن", callback_data="token_info"),
+    )
+    markup.row(types.InlineKeyboardButton("📋 تقرير شامل", callback_data="full_report"))
+    markup.row(
+        types.InlineKeyboardButton("🔄 تحديث", callback_data="refresh"),
+        types.InlineKeyboardButton("🚪 خروج", callback_data="logout"),
+    )
+    markup.row(types.InlineKeyboardButton("ℹ️ معلومات البوت", callback_data="bot_info"))
+    markup.row(
+        types.InlineKeyboardButton("👨‍💻 المطور", url=DEV_LINK),
+        types.InlineKeyboardButton("📢 القناة", url=CHANNEL_LINK),
+    )
     return markup
 
 
 def kb_back():
     markup = types.InlineKeyboardMarkup(row_width=2)
-    btn_back = types.InlineKeyboardButton("🔙 رجوع", callback_data="menu")
-    btn_refresh = types.InlineKeyboardButton("🔄 تحديث", callback_data="refresh_section")
-    btn_home = types.InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="menu")
-
-    markup.row(btn_back, btn_refresh)
-    markup.row(btn_home)
-
+    markup.row(
+        types.InlineKeyboardButton("🔙 رجوع", callback_data="menu"),
+        types.InlineKeyboardButton("🔄 تحديث", callback_data="refresh_section"),
+    )
+    markup.row(types.InlineKeyboardButton("🏠 القائمة الرئيسية", callback_data="menu"))
     return markup
 
 
@@ -806,26 +895,22 @@ def button_callback(call):
             f"━━━━━━━━━━━━━━━━━━━\n\n"
             f"👑 <b>الاسم:</b> بوت زين العراق\n"
             f"📌 <b>الوصف:</b> واجهة تفاعلية لحساب زين\n"
-            f"🔖 <b>الإصدار:</b> v8.0 (Telebot)\n"
+            f"🔖 <b>الإصدار:</b> v9.0 (Turbo)\n"
             f"👨‍💻 <b>المطور:</b> {DEVELOPER}\n"
             f"📢 <b>القناة:</b> {CHANNEL_LINK}\n"
             f"━━━━━━━━━━━━━━━━━━━\n\n"
             f"✨ <b>المميزات:</b>\n"
-            f"  • عرض الرصيد الكامل\n"
-            f"  • نقاط ممنون والمستوى\n"
-            f"  • الاشتراكات والإشعارات\n"
-            f"  • تقرير شامل\n"
-            f"  • إيموجيات مميزة 🎨\n"
+            f"  • ⚡ فحص متوازي (سريع 6x)\n"
+            f"  • 🔥 بروكسي 711proxy\n"
+            f"  • 💰 الرصيد الكامل\n"
+            f"  • 🏆 نقاط ممنون والمستوى\n"
+            f"  • 📦 الاشتراكات والإشعارات\n"
+            f"  • 📋 تقرير شامل\n"
             f"━━━━━━━━━━━━━━━━━━━"
         )
         try:
-            bot.edit_message_text(
-                ce(text),
-                query.message.chat.id,
-                query.message.message_id,
-                parse_mode="HTML",
-                reply_markup=kb_back()
-            )
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_back())
         except Exception:
             bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_back())
         bot.answer_callback_query(query.id, "")
@@ -850,13 +935,8 @@ def button_callback(call):
             f"{summary}"
         )
         try:
-            bot.edit_message_text(
-                ce(text),
-                query.message.chat.id,
-                query.message.message_id,
-                parse_mode="HTML",
-                reply_markup=kb_main(msisdn)
-            )
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_main(msisdn))
         except Exception:
             bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_main(msisdn))
         bot.answer_callback_query(query.id, "")
@@ -874,13 +954,8 @@ def button_callback(call):
             f"{summary}"
         )
         try:
-            bot.edit_message_text(
-                ce(text),
-                query.message.chat.id,
-                query.message.message_id,
-                parse_mode="HTML",
-                reply_markup=kb_main(msisdn)
-            )
+            bot.edit_message_text(ce(text), query.message.chat.id, query.message.message_id,
+                                  parse_mode="HTML", reply_markup=kb_main(msisdn))
         except Exception:
             bot.send_message(query.message.chat.id, ce(text), parse_mode="HTML", reply_markup=kb_main(msisdn))
         bot.answer_callback_query(query.id, "✅ تم التحديث")
@@ -891,12 +966,8 @@ def button_callback(call):
         USER_STATE.pop(user_id, None)
         CACHE.pop(user_id, None)
         try:
-            bot.edit_message_text(
-                ce("🚪 <b>تم تسجيل الخروج بنجاح</b>\n\nللدخول مجدداً، أرسل /start"),
-                query.message.chat.id,
-                query.message.message_id,
-                parse_mode="HTML"
-            )
+            bot.edit_message_text(ce("🚪 <b>تم تسجيل الخروج بنجاح</b>\n\nللدخول مجدداً، أرسل /start"),
+                                  query.message.chat.id, query.message.message_id, parse_mode="HTML")
         except Exception:
             bot.send_message(query.message.chat.id, ce("🚪 <b>تم تسجيل الخروج بنجاح</b>"), parse_mode="HTML")
         bot.answer_callback_query(query.id, "")
@@ -1013,6 +1084,8 @@ if __name__ == "__main__":
     print("🔥 جاري تشغيل البوت...")
     print(f"🔑 Token: {BOT_TOKEN[:15]}...")
     print(f"👨‍💻 Developer: {DEVELOPER}")
+    print(f"🌐 Proxy: {PROXY_HOST}:{PROXY_PORT}")
+    print(f"⚡ Mode: Turbo (6x parallel)")
     print(f"🟢 البوت يعمل — المطوّر: {DEVELOPER}")
 
     bot.infinity_polling(timeout=30, long_polling_timeout=30)
