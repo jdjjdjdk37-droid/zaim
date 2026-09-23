@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 ╔══════════════════════════════════════════════════════════╗
-║   Zain Iraq Bot v6.0 — بالإيموجيات المميزة (مُصحّح)      ║
+║   Zain Iraq Bot v6.1 — Railway Ready                    ║
 ║   حقوق التطوير: @to_ls                                   ║
 ╚══════════════════════════════════════════════════════════╝
 """
@@ -26,11 +26,17 @@ from telegram.constants import ParseMode
 # ═══════════════════════════════════════════════════════════
 #                    الإعدادات
 # ═══════════════════════════════════════════════════════════
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8649116276:AAGRor3c0juxDASZ2tJPutf31nGbXQ2NsSg")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-DEVELOPER = "@to_ls"
-DEV_LINK = "https://t.me/to_ls"
-CHANNEL_LINK = "https://t.me/to_ls"
+if not BOT_TOKEN:
+    raise SystemExit(
+        "❌ BOT_TOKEN غير معرّف!\n"
+        "📌 أضفه في Railway → Variables → BOT_TOKEN"
+    )
+
+DEVELOPER = os.getenv("DEVELOPER", "@to_ls")
+DEV_LINK = os.getenv("DEV_LINK", "https://t.me/to_ls")
+CHANNEL_LINK = os.getenv("CHANNEL_LINK", "https://t.me/to_ls")
 
 BASE_URL = "https://mw-mobileapp.iq.zain.com/api"
 
@@ -58,10 +64,9 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════════════════════════════════════════
-#     🎨 الإيموجيات المميزة (تُطبق على النص فقط)
+#     🎨 الإيموجيات المميزة
 # ═══════════════════════════════════════════════════════════
 _CE = {
-    # ─── الرموز الملكية ───
     '👑': '<tg-emoji emoji-id="5319149831673887746">👑</tg-emoji>',
     '⭐': '<tg-emoji emoji-id="5254001839287859496">⭐</tg-emoji>',
     '💎': '<tg-emoji emoji-id="5254001839287859496">💎</tg-emoji>',
@@ -72,29 +77,21 @@ _CE = {
     '😎': '<tg-emoji emoji-id="5976308930660276596">😎</tg-emoji>',
     '👋': '<tg-emoji emoji-id="5319149831673887746">👋</tg-emoji>',
     '🧙': '<tg-emoji emoji-id="5803157577525106419">🧙</tg-emoji>',
-
-    # ─── المال ───
     '💰': '<tg-emoji emoji-id="6037182124916740433">💰</tg-emoji>',
     '💵': '<tg-emoji emoji-id="6003691769533829755">💵</tg-emoji>',
     '💳': '<tg-emoji emoji-id="5447453226498552490">💳</tg-emoji>',
     '💲': '<tg-emoji emoji-id="6003691769533829755">💲</tg-emoji>',
     '💗': '<tg-emoji emoji-id="6043941205144771802">💗</tg-emoji>',
-
-    # ─── المستخدم ───
     '👤': '<tg-emoji emoji-id="5373020661574826232">👤</tg-emoji>',
     '👥': '<tg-emoji emoji-id="6001388309853510348">👥</tg-emoji>',
     '👁': '<tg-emoji emoji-id="5373020661574826232">👁</tg-emoji>',
     '📱': '<tg-emoji emoji-id="5834628314731387616">📱</tg-emoji>',
     '📞': '<tg-emoji emoji-id="5373020661574826232">📞</tg-emoji>',
-
-    # ─── الأمان ───
     '🔑': '<tg-emoji emoji-id="5785167918027250397">🔑</tg-emoji>',
     '🔒': '<tg-emoji emoji-id="5785167918027250397">🔒</tg-emoji>',
     '🔓': '<tg-emoji emoji-id="5998940732545571769">🔓</tg-emoji>',
     '🛡️': '<tg-emoji emoji-id="5920298756074379058">🛡️</tg-emoji>',
     '🚫': '<tg-emoji emoji-id="5888789252493283486">🚫</tg-emoji>',
-
-    # ─── الحالات ───
     '✅': '<tg-emoji emoji-id="6258259403200270844">✅</tg-emoji>',
     '☑️': '<tg-emoji emoji-id="4945049066271671758">☑️</tg-emoji>',
     '❌': '<tg-emoji emoji-id="5796291784539639311">❌</tg-emoji>',
@@ -102,15 +99,11 @@ _CE = {
     '🔄': '<tg-emoji emoji-id="5976831692604709621">🔄</tg-emoji>',
     '🔙': '<tg-emoji emoji-id="5253743295141538873">🔙</tg-emoji>',
     '🆕': '<tg-emoji emoji-id="5857339990123486296">🆕</tg-emoji>',
-
-    # ─── الألوان ───
     '🔴': '<tg-emoji emoji-id="5999278377104578246">🔴</tg-emoji>',
     '🟢': '<tg-emoji emoji-id="4945049066271671758">🟢</tg-emoji>',
     '🔵': '<tg-emoji emoji-id="5967301267549068409">🔵</tg-emoji>',
     '🔹': '<tg-emoji emoji-id="5967301267549068409">🔹</tg-emoji>',
     '🔢': '<tg-emoji emoji-id="5965466792527666087">🔢</tg-emoji>',
-
-    # ─── الإشعارات ───
     '📢': '<tg-emoji emoji-id="5902385465390013835">📢</tg-emoji>',
     '📣': '<tg-emoji emoji-id="5902385465390013835">📣</tg-emoji>',
     '📡': '<tg-emoji emoji-id="5836811137370297987">📡</tg-emoji>',
@@ -119,8 +112,6 @@ _CE = {
     '📤': '<tg-emoji emoji-id="5920298756074379058">📤</tg-emoji>',
     '📥': '<tg-emoji emoji-id="5920415115328362511">📥</tg-emoji>',
     '✉️': '<tg-emoji emoji-id="5314299563761222650">✉️</tg-emoji>',
-
-    # ─── البيانات ───
     '📊': '<tg-emoji emoji-id="5935935761336505948">📊</tg-emoji>',
     '📈': '<tg-emoji emoji-id="5935935761336505948">📈</tg-emoji>',
     '📋': '<tg-emoji emoji-id="5803363345113290876">📋</tg-emoji>',
@@ -130,14 +121,10 @@ _CE = {
     '🗂️': '<tg-emoji emoji-id="5881760620117760960">🗂️</tg-emoji>',
     '🗑️': '<tg-emoji emoji-id="5920209833071482745">🗑️</tg-emoji>',
     '📌': '<tg-emoji emoji-id="5920298756074379058">📌</tg-emoji>',
-
-    # ─── المكافآت ───
     '🎁': '<tg-emoji emoji-id="5976317950091598658">🎁</tg-emoji>',
     '🎟️': '<tg-emoji emoji-id="5785167918027250397">🎟️</tg-emoji>',
     '🎫': '<tg-emoji emoji-id="5785167918027250397">🎫</tg-emoji>',
     '🎯': '<tg-emoji emoji-id="5965466792527666087">🎯</tg-emoji>',
-
-    # ─── الأدوات ───
     '⚙️': '<tg-emoji emoji-id="5857054220179480029">⚙️</tg-emoji>',
     '🛠️': '<tg-emoji emoji-id="5965466792527666087">🛠️</tg-emoji>',
     '➕': '<tg-emoji emoji-id="5857339990123486296">➕</tg-emoji>',
@@ -146,26 +133,18 @@ _CE = {
     '🔎': '<tg-emoji emoji-id="5965466792527666087">🔎</tg-emoji>',
     'ℹ️': '<tg-emoji emoji-id="5965466792527666087">ℹ️</tg-emoji>',
     '🧹': '<tg-emoji emoji-id="5920415115328362511">🧹</tg-emoji>',
-
-    # ─── الحركة ───
     '🚀': '<tg-emoji emoji-id="5967301267549068409">🚀</tg-emoji>',
     '🔗': '<tg-emoji emoji-id="5967301267549068409">🔗</tg-emoji>',
     '⬆️': '<tg-emoji emoji-id="5920298756074379058">⬆️</tg-emoji>',
     '⬇️': '<tg-emoji emoji-id="5922681088534124293">⬇️</tg-emoji>',
-
-    # ─── الشبكة ───
     '🌐': '<tg-emoji emoji-id="5837128389424585193">🌐</tg-emoji>',
     '🌾': '<tg-emoji emoji-id="5981216003810400332">🌾</tg-emoji>',
-
-    # ─── التواريخ ───
     '📅': '<tg-emoji emoji-id="5314299563761222650">📅</tg-emoji>',
     '📝': '<tg-emoji emoji-id="5314299563761222650">📝</tg-emoji>',
     '✏️': '<tg-emoji emoji-id="5314299563761222650">✏️</tg-emoji>',
     '⏳': '<tg-emoji emoji-id="5314299563761222650">⏳</tg-emoji>',
     '⏰': '<tg-emoji emoji-id="5314299563761222650">⏰</tg-emoji>',
     '💬': '<tg-emoji emoji-id="5314299563761222650">💬</tg-emoji>',
-
-    # ─── عام ───
     '🏠': '<tg-emoji emoji-id="5881760620117760960">🏠</tg-emoji>',
     '🏦': '<tg-emoji emoji-id="5803363345113290876">🏦</tg-emoji>',
     '🏷️': '<tg-emoji emoji-id="5881760620117760960">🏷️</tg-emoji>',
@@ -175,7 +154,6 @@ _CE = {
 
 
 def ce(text: str) -> str:
-    """تطبيق الإيموجيات المميزة — للنصوص فقط"""
     if not text:
         return text
     for ch, rep in _CE.items():
@@ -298,11 +276,10 @@ def login_zain(msisdn, password):
 
 
 # ═══════════════════════════════════════════════════════════
-#     🎨 أزرار (بدون tg-emoji — إيموجي عادي فقط)
+#     🎨 أزرار
 # ═══════════════════════════════════════════════════════════
 def make_button(text, callback_data=None, url=None, color=None):
-    """زر بإيموجي عادي — متوافق مع كل النسخ"""
-    button = {"text": text}   # ✅ بدون ce()
+    button = {"text": text}
     if url:
         button["url"] = url
     else:
@@ -313,11 +290,10 @@ def make_button(text, callback_data=None, url=None, color=None):
 
 
 def send_colored_keyboard(chat_id, text, keyboard_rows):
-    """إرسال رسالة — النص فقط يُطبَّق عليه ce()"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {
         "chat_id": chat_id,
-        "text": ce(text),   # ✅ ce على النص فقط
+        "text": ce(text),
         "parse_mode": "HTML",
         "reply_markup": {"inline_keyboard": keyboard_rows},
         "disable_web_page_preview": True,
@@ -330,12 +306,11 @@ def send_colored_keyboard(chat_id, text, keyboard_rows):
 
 
 def edit_colored_keyboard(chat_id, message_id, text, keyboard_rows):
-    """تعديل رسالة — النص فقط يُطبَّق عليه ce()"""
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/editMessageText"
     payload = {
         "chat_id": chat_id,
         "message_id": message_id,
-        "text": ce(text),   # ✅ ce على النص فقط
+        "text": ce(text),
         "parse_mode": "HTML",
         "reply_markup": {"inline_keyboard": keyboard_rows},
         "disable_web_page_preview": True,
@@ -605,7 +580,7 @@ def fmt_token_info(state):
 
 
 # ═══════════════════════════════════════════════════════════
-#         🎨 الأزرار (إيموجي عادي فقط)
+#         🎨 الأزرار
 # ═══════════════════════════════════════════════════════════
 def kb_main(msisdn="—"):
     return [
@@ -898,7 +873,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"━━━━━━━━━━━━━━━━━━━\n\n"
             f"👑 <b>الاسم:</b> بوت زين العراق\n"
             f"📌 <b>الوصف:</b> واجهة تفاعلية لحساب زين\n"
-            f"🔖 <b>الإصدار:</b> v6.0\n"
+            f"🔖 <b>الإصدار:</b> v6.1\n"
             f"👨‍💻 <b>المطور:</b> {DEVELOPER}\n"
             f"📢 <b>القناة:</b> {CHANNEL_LINK}\n"
             f"━━━━━━━━━━━━━━━━━━━\n\n"
@@ -1024,11 +999,9 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #                    التشغيل
 # ═══════════════════════════════════════════════════════════
 def main():
-    if BOT_TOKEN == "8649116276:AAGRor3c0juxDASZ2tJPutf31nGbXQ2NsSg":
-        print("🔴 ضع BOT_TOKEN أولاً!")
-        return
-
     print("🔥 جاري تشغيل البوت...")
+    print(f"🔑 Token: {BOT_TOKEN[:15]}...")
+    print(f"👨‍💻 Developer: {DEVELOPER}")
 
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -1046,4 +1019,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(
